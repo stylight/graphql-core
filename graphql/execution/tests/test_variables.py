@@ -11,6 +11,7 @@ from graphql.type import (GraphQLArgument, GraphQLField,
                           GraphQLList, GraphQLNonNull, GraphQLObjectType,
                           GraphQLScalarType, GraphQLSchema, GraphQLString)
 
+
 TestComplexScalar = GraphQLScalarType(
     name='ComplexScalar',
     serialize=lambda v: 'SerializedValue' if v == 'DeserializedValue' else None,
@@ -29,9 +30,8 @@ stringify = lambda obj: json.dumps(obj, sort_keys=True)
 
 
 def input_to_json(obj, args, context, info):
-    input = args.get('input')
-    if input:
-        return stringify(input)
+    if 'input' in args:
+        return stringify(args['input'])
 
 
 TestNestedInputObject = GraphQLInputObjectType(
@@ -92,6 +92,7 @@ schema = GraphQLSchema(TestType)
 
 def check(doc, expected, args=None):
     ast = parse(doc)
+    print "args", args
     response = execute(schema, ast, variable_values=args)
 
     if response.errors:
@@ -108,6 +109,52 @@ def check(doc, expected, args=None):
 
 
 # Handles objects and nullability
+
+def test_explicit_null_values_from_variables_are_passed():
+    doc = '''
+    query ($null_value: String) {
+        fieldWithNullableStringInput(input: $null_value)
+    }
+    '''
+    params = {'null_value': None}
+    check(doc, {
+        'data': {"fieldWithNullableStringInput": stringify(None)}
+    }, params)
+
+
+def test_explicit_null_values_from_ast_are_passed():
+    doc = '''
+    {
+        fieldWithNullableStringInput(input: null)
+    }
+    '''
+    check(doc, {
+        'data': {"fieldWithNullableStringInput": stringify(None)}
+    })
+
+
+def test_omitted_null_values_from_variables_are_not_passed():
+    doc = '''
+    query ($null_value: String) {
+        fieldWithNullableStringInput(input: $null_value)
+    }
+    '''
+    params = {}
+    check(doc, {
+        'data': {"fieldWithNullableStringInput": None}
+    }, params)
+
+
+def test_omitted_null_values_from_ast_are_not_passed():
+    doc = '''
+    {
+        fieldWithNullableStringInput
+    }
+    '''
+    check(doc, {
+        'data': {"fieldWithNullableStringInput": None}
+    })
+
 
 def test_inline_executes_with_complex_input():
     doc = '''
@@ -314,7 +361,7 @@ def test_allows_nullable_inputs_to_be_set_to_null_in_a_variable():
     '''
     check(doc, {
         'data': {
-            'fieldWithNullableStringInput': None
+            'fieldWithNullableStringInput': stringify(None)
         }
     }, {'value': None})
 
@@ -373,7 +420,8 @@ def test_does_not_allow_non_nullable_inputs_to_be_set_to_null_in_a_variable():
 
     assert format_error(excinfo.value) == {
         'locations': [{'column': 27, 'line': 2}],
-        'message': 'Variable "$value" of required type "String!" was not provided.'
+        'message': ('Variable "$value" got invalid value null.\n'
+                    'Expected "String!", found null.')
     }
 
 
@@ -473,7 +521,8 @@ def test_does_not_allow_non_null_lists_to_be_null():
 
     assert format_error(excinfo.value) == {
         'locations': [{'column': 13, 'line': 2}],
-        'message': 'Variable "$input" of required type "[String]!" was not provided.'
+        'message': ('Variable "$input" got invalid value null.\n'
+                    'Expected "[String]!", found null.')
     }
 
 
@@ -514,7 +563,7 @@ def test_allows_lists_of_non_nulls_to_be_null():
 
     check(doc, {
         'data': {
-            'listNN': None
+            'listNN': stringify(None)
         }
     }, {'input': None})
 
@@ -563,7 +612,8 @@ def test_does_not_allow_non_null_lists_of_non_nulls_to_be_null():
 
     assert format_error(excinfo.value) == {
         'locations': [{'column': 13, 'line': 2}],
-        'message': 'Variable "$input" of required type "[String!]!" was not provided.'
+        'message': ('Variable "$input" got invalid value null.\n'
+                    'Expected "[String!]!", found null.')
     }
 
 
