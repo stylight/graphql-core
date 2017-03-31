@@ -534,6 +534,27 @@ class BooleanValue(Value):
         return id(self)
 
 
+class NullValue(Value):
+    __slots__ = ('loc', 'value',)
+    _fields = ('value',)
+
+    def __init__(self, loc=None):
+        self.loc = loc
+        self.value = None
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__)
+
+    def __repr__(self):
+        return 'NullValue()'
+
+    def __copy__(self):
+        return NullValue(loc=self.loc   )
+
+    def __hash__(self):
+        return id(self)
+
+
 class EnumValue(Value):
     __slots__ = ('loc', 'value',)
     _fields = ('value',)

@@ -9,12 +9,15 @@ from six import string_types
 
 from ..type import (GraphQLEnumType, GraphQLInputObjectType, GraphQLList,
                     GraphQLNonNull, GraphQLScalarType)
+from ..utils.undefined import undefined
 
 _empty_list = []
 
 
 def is_valid_value(value, type):
     """Given a type and any value, return True if that value is valid."""
+    if value is undefined:
+        return _empty_list
     if isinstance(type, GraphQLNonNull):
         of_type = type.of_type
         if value is None:

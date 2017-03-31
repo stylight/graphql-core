@@ -4,6 +4,7 @@ import copy
 from ..language import ast
 from ..pyutils.cached_property import cached_property
 from ..pyutils.ordereddict import OrderedDict
+from ..utils.undefined import undefined
 from ..utils.assert_valid_name import assert_valid_name
 
 
@@ -265,7 +266,8 @@ class GraphQLField(object):
 class GraphQLArgument(object):
     __slots__ = 'type', 'default_value', 'description', 'out_name'
 
-    def __init__(self, type, default_value=None, description=None, out_name=None):
+    def __init__(self, type, default_value=undefined, description=None,
+                 out_name=None):
         self.type = type
         self.default_value = default_value
         self.description = description
@@ -538,7 +540,8 @@ class GraphQLInputObjectType(GraphQLType):
 class GraphQLInputObjectField(object):
     __slots__ = 'type', 'default_value', 'description', 'out_name'
 
-    def __init__(self, type, default_value=None, description=None, out_name=None):
+    def __init__(self, type, default_value=undefined, description=None,
+                 out_name=None):
         self.type = type
         self.default_value = default_value
         self.description = description

@@ -6,10 +6,11 @@ from six import string_types
 from ..error import GraphQLError
 from ..language.printer import print_ast
 from ..type import (GraphQLEnumType, GraphQLInputObjectType, GraphQLList,
-                    GraphQLNonNull, GraphQLScalarType, is_input_type)
+                    GraphQLNonNull, GraphQLScalarType, GraphQLString,
+                    is_input_type)
 from ..utils.is_valid_value import is_valid_value
 from ..utils.type_from_ast import type_from_ast
-from ..utils.value_from_ast import value_from_ast
+from ..utils.value_from_ast import value_from_ast, undefined
 
 __all__ = ['get_variable_values', 'get_argument_values']
 
@@ -23,8 +24,10 @@ def get_variable_values(schema, definition_asts, inputs):
     values = {}
     for def_ast in definition_asts:
         var_name = def_ast.variable.name.value
-        value = get_variable_value(schema, def_ast, inputs.get(var_name))
-        values[var_name] = value
+        value = get_variable_value(schema, def_ast,
+                                   inputs.get(var_name, undefined))
+        if value is not undefined:
+            values[var_name] = value
 
     return values
 
@@ -51,11 +54,10 @@ def get_argument_values(arg_defs, arg_asts, variables=None):
             arg_def.type,
             variables
         )
-
-        if value is None:
+        if value is undefined and arg_def.default_value is not undefined:
             value = arg_def.default_value
 
-        if value is not None:
+        if value is not undefined:
             # We use out_name as the output name for the
             # dict if exists
             result[arg_def.out_name or name] = value
@@ -81,14 +83,14 @@ def get_variable_value(schema, definition_ast, input):
     input_type = type
     errors = is_valid_value(input, input_type)
     if not errors:
-        if input is None:
+        if input is undefined:
             default_value = definition_ast.default_value
-            if default_value:
+            if default_value is not undefined:
                 return value_from_ast(default_value, input_type)
 
         return coerce_value(input_type, input)
 
-    if input is None:
+    if input is undefined:
         raise GraphQLError(
             'Variable "${}" of required type "{}" was not provided.'.format(
                 variable.name.value,
@@ -109,7 +111,19 @@ def get_variable_value(schema, definition_ast, input):
 
 
 def coerce_value(type, value):
-    """Given a type and any value, return a runtime value coerced to match the type."""
+    """Given a type and any value, return a runtime value coerced to match the type.
+    
+    >>> undefined == coerce_value(GraphQLNonNull(GraphQLString), undefined)
+    True
+    
+    >>> coerce_value(GraphQLNonNull(GraphQLString), None)
+    
+    >>> undefined == coerce_value(GraphQLString, undefined)
+    True
+    
+    >>> coerce_value(GraphQLString, None)
+    
+    """
     if isinstance(type, GraphQLNonNull):
         # Note: we're not checking that the result of coerceValue is
         # non-null.
@@ -119,22 +133,27 @@ def coerce_value(type, value):
     if value is None:
         return None
 
+    if value is undefined:
+        return undefined
+
     if isinstance(type, GraphQLList):
         item_type = type.of_type
         if not isinstance(value, string_types) and isinstance(value, collections.Iterable):
-            return [coerce_value(item_type, item) for item in value]
+            result = [coerce_value(item_type, item) for item in value]
         else:
-            return [coerce_value(item_type, value)]
+            result = [coerce_value(item_type, value)]
+        return result
 
     if isinstance(type, GraphQLInputObjectType):
         fields = type.fields
         obj = {}
         for field_name, field in fields.items():
-            field_value = coerce_value(field.type, value.get(field_name))
-            if field_value is None:
+            field_value = coerce_value(field.type,
+                                       value.get(field_name, undefined))
+            if field_value is undefined:
                 field_value = field.default_value
 
-            if field_value is not None:
+            if field_value is not undefined:
                 # We use out_name as the output name for the
                 # dict if exists
                 obj[field.out_name or field_name] = field_value
